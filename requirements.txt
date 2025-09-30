@@ -1,3 +1,15 @@
+pip>=23.2.1
+toml>=0.10.2
+wheel>=0.41.2
+tornado>=6.4.1
+setuptools>=68.2.0
+numpy>=1.26.4
+matplotlib>=3.8.2
+pandas>=2.2.2
+tqdm>=4.66,<5
+llvmlite==0.42.0
+numba==0.59.1
+joblib>=1.4.2
 altair==5.3.0
 attrs==23.2.0
 blinker==1.8.2
@@ -16,6 +28,8 @@ markdown-it-py==3.0.0
 MarkupSafe==2.1.5
 mdurl==0.1.2
 numpy==1.26.4
+numpy==1.26.4; platform_machine != "x86"
+numpy==1.24.4; platform_machine == "x86"
 packaging==24.1
 pandas==2.2.2
 pillow==10.3.0
@@ -39,6 +53,11 @@ threadpoolctl==3.5.0
 toml==0.10.2
 toolz==0.12.1
 tornado==6.4.1
+tqdm>=4.66
 typing_extensions==4.12.2
 tzdata==2024.1
 urllib3==2.2.2
+tqdm>=4.66,<5
+ipywidgets>=8.1,<9
+jupyterlab-widgets>=3.0,<4
+widgetsnbextension>=4.0,<5
