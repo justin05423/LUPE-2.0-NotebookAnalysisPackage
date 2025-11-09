@@ -1,5 +1,3 @@
-/model
-model/model.pkl
 /processed_dataset/lupe_capsaicin_morphine
 **/__pycache__/
 **/.DS_Store/
