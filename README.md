@@ -21,6 +21,7 @@ Try LUPE today and unlock a new level of insights into animal behavior.
 ## Table of Contents
 
 - [System Requirements](#system-requirements)
+- [Update Instructions](#update-instructions)
 - [Installation Guide](#installation-guide)
 - [Physical System Build](#physical-system-build)
 - [Contacting](#contacting)
@@ -66,6 +67,25 @@ pip install -r requirements.txt
 jupyter lab
 ```
 #### See [README-Analysis](https://github.com/justin05423/LUPE-2.0-AnalysisPackage/blob/main/manuscript_acc_2025/README-Analysis.md) for instructions to run and reproduce some of the analyses from the  [PRE-PRINT manuscript](https://github.com/justin05423/LUPE-2.0-AnalysisPackage/tree/main/manuscript_acc_2025)<sup>4</sup> data. 
+
+---
+
+# Update Instructions
+
+If you have cloned the LUPE-2.0-AnalysisPackage repository and want to update your local copy without re-downloading the entire package, follow these steps:
+
+1. Open your terminal or command prompt and navigate to the folder where the repository is located.
+2. Run the command:
+   ```commandline
+   git pull origin main
+   ```
+   This fetches the latest updates from the main branch.
+3. Optionally, update Python dependencies by running:
+   ```commandline
+   pip install -r requirements.txt --upgrade
+   ```
+
+> 💡 **Note:** If you downloaded the repository as a ZIP file instead of cloning via Git, you will need to re-download the ZIP to get the latest updates.
 
 ---
 
