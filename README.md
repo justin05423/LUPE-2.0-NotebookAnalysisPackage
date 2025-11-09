@@ -55,7 +55,7 @@ Refer to the respective GitHub repositories for additional technical documentati
 ---
 
 # Installation Guide
-#### Download the LUPE 2.0 A-SOiD Model [HERE](https://upenn.box.com/s/9rfslrvcc7m6fji8bmgktnegghyu88b0) and move the contents of the folder into this 'Model' folder.
+#### Download the LUPE 2.0 A-SOiD Model [HERE](https://upenn.box.com/s/9rfslrvcc7m6fji8bmgktnegghyu88b0) and move the contents of the folder into this 'Model' folder (If not already present in 'model' folder when repository is downloaded/cloned).
 > **Note**: Find the LUPE 2.0 DLC Model [HERE](https://upenn.box.com/s/av3i14c64rj6zls9lz6pda0it5b5q7f3) for analyzing pose estimation for LUPE video data.
 
 #### Access the analysis scripts: In a Virutal Environment IDE
