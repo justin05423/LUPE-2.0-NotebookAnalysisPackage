@@ -18,6 +18,19 @@ Try LUPE today and unlock a new level of insights into animal behavior.
 
 ---
 
+## 📄 Associated Publication
+
+LUPE is described and validated in our recent peer-reviewed publication in *Nature*:
+
+> **Oswell, Rogers, James et al.**  
+> *Mimicking opioid analgesia in cortical pain circuits*  
+> **Nature (2025)**  
+> 🔗 https://www.nature.com/articles/s41586-025-09908-w
+
+If you use LUPE in your research, please cite this work.
+
+---
+
 ## Table of Contents
 
 - [System Requirements](#system-requirements)
@@ -97,13 +110,12 @@ For an overview on building the LUPE 2.0 System, check out the [Build](https://g
 # Contacting
 
 #### Project Funding
-Collaboration between [Corder Lab](https://corderlab.com/) at University of Pennsylvania and 
+- Collaboration between [Corder Lab](https://corderlab.com/) at University of Pennsylvania and 
 [Yttri Lab](https://labs.bio.cmu.edu/yttri/) from Carnegie Mellon. 
 
 #### Contributors
-Justin James (Corder Lab) actively develops and maintains this repository/cloud resource.
-
-Other contributors include Alexander Hsu (Yttri Lab).
+- Justin James (Corder Lab) actively develops and maintains this repository/cloud resource.
+- Other contributors include Alexander Hsu (Yttri Lab).
 
 
 ---
