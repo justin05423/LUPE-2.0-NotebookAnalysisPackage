@@ -35,6 +35,7 @@ If you use LUPE in your research, please cite this work.
 
 - [System Requirements](#system-requirements)
 - [Installation Guide](#installation-guide)
+- [Running in Google Colab](#running-in-google-colab)
 - [Update Instructions](#update-instructions)
 - [Physical System Build](#physical-system-build)
 - [Contacting](#contacting)
@@ -80,6 +81,20 @@ pip install -r requirements.txt
 jupyter lab
 ```
 #### See [README-Analysis](https://github.com/justin05423/LUPE-2.0-AnalysisPackage/blob/main/manuscript_acc_2025/README-Analysis.md) for instructions to run and reproduce some of the analyses from the  [PRE-PRINT manuscript](https://github.com/justin05423/LUPE-2.0-AnalysisPackage/tree/main/manuscript_acc_2025)<sup>4</sup> data. 
+
+---
+
+# Running in Google Colab
+
+No installation needed: everything runs in your browser, and your projects and results are saved in your Google Drive.
+
+1. Open [LUPE_Colab_Setup.ipynb in Colab](https://colab.research.google.com/github/justin05423/LUPE-2.0-NotebookAnalysisPackage/blob/main/LUPE_Colab_Setup.ipynb) and run every cell (once). It puts the package in `MyDrive/LUPE-2.0-NotebookAnalysisPackage`, copies the notebooks into `notebooks/`, and checks the behavior model.
+2. Upload your DeepLabCut CSV folders to Google Drive, organized as `<project>/<group>/<condition>/*.csv`.
+3. In Google Drive, open any notebook in `LUPE-2.0-NotebookAnalysisPackage/notebooks/` with Google Colaboratory. Run the **Google Colab only** cell first, then continue as usual.
+
+> 💡 **Model:** `model/model.pkl` only loads in scikit-learn 1.2.x, which Colab does not provide. The notebooks automatically use `model/model_portable.npz` instead, the same classifier stored as plain arrays (identical predictions; see `utils/model_compat.py`).
+
+To get updates later, run `LUPE_Colab_Setup.ipynb` again.
 
 ---
 

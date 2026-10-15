@@ -7,8 +7,18 @@ import os
 
 
 def load_model(path):
-    with open(path, 'rb') as fr:
-        model = pickle.load(fr)
+    # model.pkl only unpickles in scikit-learn 1.2.x. Newer versions (e.g. Google Colab) fall back to
+    # model_portable.npz in the same folder, the same forest stored as plain arrays (see utils/model_compat.py)
+    portable_path = os.path.join(os.path.dirname(path), 'model_portable.npz')
+    try:
+        with open(path, 'rb') as fr:
+            model = pickle.load(fr)
+    except Exception as e:
+        if not os.path.exists(portable_path):
+            raise
+        print(f"Could not load {path} ({type(e).__name__}); loading {portable_path} instead.")
+        from utils.model_compat import load_portable_model
+        model = load_portable_model(portable_path)
     return model
 
 
