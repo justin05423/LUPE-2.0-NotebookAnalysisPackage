@@ -209,24 +209,40 @@ def assign_states(trans_unfolded: np.ndarray, centroids: np.ndarray):
     return state_assignments, min_distances
 
 def resample_states(state_assignments: np.ndarray, window_slide: int, window_size: int, target_length: int) -> np.ndarray:
-    """Resample state assignments from window-level to frame-level."""
+    """Resample state assignments from window-level to frame-level.
+
+    Windows with state 0 (no data) are skipped, so frames not covered by any valid window stay 0.
+    """
     n_wins, n_animals = state_assignments.shape
     behav_state = np.zeros((target_length, n_animals), dtype=int)
 
     for a in range(n_animals):
         for t in range(n_wins):
+            if int(state_assignments[t, a]) == 0:
+                continue
             start_idx = int(window_slide * t)
             end_idx = int(min(start_idx + window_size, target_length))
             behav_state[start_idx:end_idx, a] = int(state_assignments[t, a])
 
     return behav_state
 
-def calculate_model_fit(trans_unfolded: np.ndarray, centroids: np.ndarray, n_shuffles: int = 100):
-    """Calculate model fit compared to shuffled centroids."""
+def calculate_model_fit(
+    trans_unfolded: np.ndarray,
+    centroids: np.ndarray,
+    n_shuffles: int = 100,
+    window_valid: np.ndarray | None = None,
+):
+    """Calculate model fit compared to shuffled centroids.
+
+    window_valid: optional (n_wins, n_animals) bool mask; windows that are False (padded frames)
+      are left out of each animal's mean distance.
+    """
     n_wins, n_features, n_animals = trans_unfolded.shape
+    if window_valid is None:
+        window_valid = np.ones((n_wins, n_animals), dtype=bool)
 
     _, real_distances = assign_states(trans_unfolded, centroids)
-    real_fit = np.mean(real_distances, axis=0)
+    real_fit = np.sum(np.where(window_valid, real_distances, 0.0), axis=0) / np.sum(window_valid, axis=0)
 
     print(f"[LUPE-AMPS] Calculating shuffled model fits ({n_shuffles} iterations)...")
     shuffled_fit = np.zeros((n_animals, n_shuffles), dtype=float)
@@ -236,7 +252,7 @@ def calculate_model_fit(trans_unfolded: np.ndarray, centroids: np.ndarray, n_shu
         shuffled_centroids = centroids[:, perm]
 
         for a in range(n_animals):
-            data = trans_unfolded[:, :, a]
+            data = trans_unfolded[window_valid[:, a], :, a]
             distances = cdist(data, shuffled_centroids, metric='euclidean')
             shuffled_fit[a, v] = np.mean(np.min(distances, axis=1))
 
@@ -311,6 +327,7 @@ def calculate_state_statistics(
     n_states: int,
     fps: float,
     min_frames: int,
+    valid_frames: np.ndarray | None = None,
 ):
     """Calculate fraction time, bout number, and bout duration for states.
 
@@ -324,6 +341,9 @@ def calculate_state_statistics(
         Frame-rate of `behav_state`.
     min_frames : int
         Minimum consecutive frames required to count a bout.
+    valid_frames : np.ndarray, optional
+        (n_animals,) number of real frames per animal. Each animal's stats use only
+        behav_state[:valid_frames[k], k]; an animal with 0 valid frames gets NaN.
 
     Returns
     -------
@@ -346,7 +366,16 @@ def calculate_state_statistics(
     bout_duration_state = np.zeros((n_animals, n_states), dtype=float)
 
     for k in range(n_animals):
-        data = behav_state[:, k]
+        if valid_frames is None:
+            data = behav_state[:, k]
+        else:
+            data = behav_state[: int(valid_frames[k]), k]
+
+        if len(data) == 0:
+            total_fraction_state[k, :] = np.nan
+            n_bouts_state[k, :] = np.nan
+            bout_duration_state[k, :] = np.nan
+            continue
 
         for b in range(1, n_states + 1):
             binary_data = (data == b).astype(int)
@@ -596,6 +625,7 @@ def load_lupe_data(base_dir: str, groups: list, conditions: list):
       expected_length: int (max frames across animals)
       behavior_vectors: list[np.ndarray], each animal's labels at its own length (no padding),
         used for the per-animal behavior statistics (Sections 2/2b)
+      valid_frames: (n_animals,) int, number of real (unpadded) frames per animal
     """
     rows = []  # each entry: dict with file info + vector
     for group in groups:
@@ -640,6 +670,18 @@ def load_lupe_data(base_dir: str, groups: list, conditions: list):
     if expected_length <= 0:
         raise ValueError("Loaded files but frame counts are zero.")
 
+    short_rows = [r for r in rows if r["n_frames"] < expected_length]
+    if len(short_rows) > 0:
+        print(
+            f"[LUPE-AMPS] Warning: {len(short_rows)} file(s) shorter than the longest ({expected_length} frames). "
+            "Their missing frames are padded for the state model and excluded from all state statistics:"
+        )
+        for r in short_rows:
+            print(
+                f"[LUPE-AMPS]   - {r['group']}/{r['condition']}/{r['animal']}: {r['n_frames']} frames "
+                f"({expected_length - r['n_frames']} short)"
+            )
+
     # Pad/truncate all to expected_length (used by the state model, Sections 4-9)
     behavior_data = []
     behavior_vectors = []
@@ -663,9 +705,10 @@ def load_lupe_data(base_dir: str, groups: list, conditions: list):
         condition_labels.append(r["condition"])
 
     behavior_matrix = np.column_stack(behavior_data)  # (expected_length, n_animals)
+    valid_frames = np.array([len(v) for v in behavior_vectors], dtype=int)
 
     print(f"[LUPE-AMPS] Loaded {behavior_matrix.shape[1]} animals, {behavior_matrix.shape[0]} frames each")
-    return behavior_matrix, animal_names, group_labels, condition_labels, expected_length, behavior_vectors
+    return behavior_matrix, animal_names, group_labels, condition_labels, expected_length, behavior_vectors, valid_frames
 
 
 # Main entrypoint called by Streamlit
@@ -868,7 +911,7 @@ def behavior_LUPE_AMPS(
         print(f"[LUPE-AMPS] Time windows: {time_ranges_min}")
 
     # Section 2: DATA LOADING AND BEHAVIOR STATISTICS
-    behavior_matrix, animal_names, group_labels, condition_labels, expected_length, behavior_vectors = load_lupe_data(
+    behavior_matrix, animal_names, group_labels, condition_labels, expected_length, behavior_vectors, valid_frames = load_lupe_data(
         base_data_dir, selected_groups, selected_conditions
     )
 
@@ -923,12 +966,28 @@ def behavior_LUPE_AMPS(
             state_assignments, min_distances = assign_states(trans_unfolded, centroids)
             print(f"[LUPE-AMPS] State assignments shape: {state_assignments.shape}")
 
+            # Real (unpadded) frames per animal in downsampled space. Windows that reach into an
+            # animal's padded frames are set to state 0 (no data), the same as windows past the end
+            # of a full-length recording.
+            valid_frames_ds = np.maximum(
+                1, np.floor(valid_frames * (float(target_fps) / float(sampling_rate))).astype(int)
+            )
+            window_valid = (wins[:, None] + window_size) < valid_frames_ds[None, :]
+            state_assignments[~window_valid] = 0
+            n_masked = int(np.sum(~window_valid))
+            if n_masked > 0:
+                print(f"[LUPE-AMPS] {n_masked} window(s) overlap padded frames and were set to state 0 (no data)")
+
             # Resample to frame-level (downsampled frame space)
             behav_state = resample_states(state_assignments, window_slide, window_size, behavior_ds.shape[0])
+            for a in range(behav_state.shape[1]):
+                behav_state[valid_frames_ds[a]:, a] = 0
             print(f"[LUPE-AMPS] Frame-level states shape: {behav_state.shape}")
 
             # Calculate model fit
-            real_fit, shuffled_fit = calculate_model_fit(trans_unfolded, centroids, n_shuffles=int(model_fit_shuffles))
+            real_fit, shuffled_fit = calculate_model_fit(
+                trans_unfolded, centroids, n_shuffles=int(model_fit_shuffles), window_valid=window_valid
+            )
             shuffled_mean = np.mean(shuffled_fit, axis=1)
             shuffled_sem = np.std(shuffled_fit, axis=1, ddof=1) / np.sqrt(shuffled_fit.shape[1])
 
@@ -1273,7 +1332,7 @@ def behavior_LUPE_AMPS(
             state_fractions = np.zeros((len(animal_names), 6), dtype=float)
             for a in range(len(animal_names)):
                 for s in range(1, 7):
-                    state_fractions[a, s - 1] = float(np.mean(behav_state[:, a] == s))
+                    state_fractions[a, s - 1] = float(np.mean(behav_state[: valid_frames_ds[a], a] == s))
 
             df_state_fractions = pd.DataFrame({
                 'Animal': animal_names,
@@ -1341,6 +1400,7 @@ def behavior_LUPE_AMPS(
                 n_states=n_states,
                 fps=float(target_fps),
                 min_frames=min_frames_state_true_positive,
+                valid_frames=valid_frames_ds,
             )
 
             print(f"[LUPE-AMPS] State statistics calculated for {total_fraction_state.shape[0]} animals")
@@ -1393,15 +1453,20 @@ def behavior_LUPE_AMPS(
                         continue
 
                     behav_state_win = behav_state[sl, :]
+                    valid_win = np.clip(valid_frames_ds - sl.start, 0, sl.stop - sl.start)
 
                     frac_s, bouts_s, dur_s = calculate_state_statistics(
                         behav_state=behav_state_win,
                         n_states=n_states,
                         fps=float(target_fps),
                         min_frames=min_frames_state_true_positive,
+                        valid_frames=valid_win,
                     )
 
                     for a_idx, animal in enumerate(animal_names):
+                        if valid_win[a_idx] == 0:
+                            print(f"[LUPE-AMPS] {animal}: recording ends before window {label}, no state rows")
+                            continue
                         for s_idx in range(n_states):
                             state_name = state_column_names[s_idx + 1]
                             state_timepoint_rows.append({
@@ -1925,17 +1990,24 @@ def behavior_LUPE_AMPS(
                             continue
 
                         behav_state_win = behav_state[sl, :]
+                        valid_win = np.clip(valid_frames_ds - sl.start, 0, sl.stop - sl.start)
 
-                        # State occupancy per animal (n_animals x n_states)
+                        # State occupancy per animal over its own frames in the window (n_animals x n_states)
                         occ = np.zeros((behav_state_win.shape[1], n_states), dtype=float)
-                        for s in range(1, n_states + 1):
-                            occ[:, s - 1] = np.mean(behav_state_win == s, axis=0)
+                        for a_idx in range(behav_state_win.shape[1]):
+                            if valid_win[a_idx] == 0:
+                                continue
+                            for s in range(1, n_states + 1):
+                                occ[a_idx, s - 1] = np.mean(behav_state_win[: valid_win[a_idx], a_idx] == s)
 
                         proj = project_to_pc_space(occ, pca_coeff, pca_mu)
                         pc1_win = proj[:, 0]
                         pc2_win = proj[:, 1]
 
                         for a_idx, animal in enumerate(animal_names):
+                            if valid_win[a_idx] == 0:
+                                print(f"[LUPE-AMPS] {animal}: recording ends before window {label}, no AMPS row")
+                                continue
                             amps_timepoint_rows.append({
                                 'Time_Group': label,
                                 'Start_min': float(start_min),
@@ -2292,6 +2364,9 @@ def behavior_LUPE_AMPS(
             dur_win = nf_win / sampling_rate / 60.0
 
             for a_idx, animal in enumerate(animal_names):
+                if nf_win[a_idx] == 0:
+                    print(f"[LUPE-AMPS] {animal}: recording ends before window {label}, no behavior rows")
+                    continue
                 for b_idx, beh_name in enumerate(behaviors):
                     behavior_timepoint_rows.append(
                         {
