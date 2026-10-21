@@ -15,25 +15,16 @@ except Exception:
 
 # Helper Functions
 def find_bouts(binary_data: np.ndarray, min_frames: int):
-    bout_starts = []
-    bout_ends = []
+    # Edge bouts (running at frame 0 or at the last frame) are counted, with durations censored at the recording edge.
+    padded = np.concatenate(([0], np.asarray(binary_data, dtype=int), [0]))
 
     # diff: +1 indicates 0->1 transition; -1 indicates 1->0 transition
-    diff = np.diff(binary_data)
-    potential_starts = np.where(diff == 1)[0] + 1
-    potential_ends = np.where(diff == -1)[0]
+    diff = np.diff(padded)
+    potential_starts = np.where(diff == 1)[0]
+    potential_ends = np.where(diff == -1)[0] - 1
 
-    for start in potential_starts:
-        end_check = min(start + min_frames, len(binary_data))
-        if np.all(binary_data[start:end_check] == 1):
-            bout_starts.append(start)
-
-    for end in potential_ends:
-        start_check = max(end - min_frames + 1, 0)
-        if np.all(binary_data[start_check:end + 1] == 1):
-            bout_ends.append(end)
-
-    return np.array(bout_starts), np.array(bout_ends)
+    keep = (potential_ends - potential_starts + 1) >= min_frames
+    return potential_starts[keep], potential_ends[keep]
 
 def calculate_behavior_statistics(
     behavior_vectors: list,
