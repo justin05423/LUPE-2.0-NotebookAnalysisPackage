@@ -15,85 +15,66 @@ except Exception:
 
 # Helper Functions
 def find_bouts(binary_data: np.ndarray, min_frames: int):
-    bout_starts = []
-    bout_ends = []
+    # Edge bouts (running at frame 0 or at the last frame) are counted, with durations censored at the recording edge.
+    padded = np.concatenate(([0], np.asarray(binary_data, dtype=int), [0]))
 
     # diff: +1 indicates 0->1 transition; -1 indicates 1->0 transition
-    diff = np.diff(binary_data)
-    potential_starts = np.where(diff == 1)[0] + 1
-    potential_ends = np.where(diff == -1)[0]
+    diff = np.diff(padded)
+    potential_starts = np.where(diff == 1)[0]
+    potential_ends = np.where(diff == -1)[0] - 1
 
-    for start in potential_starts:
-        end_check = min(start + min_frames, len(binary_data))
-        if np.all(binary_data[start:end_check] == 1):
-            bout_starts.append(start)
-
-    for end in potential_ends:
-        start_check = max(end - min_frames + 1, 0)
-        if np.all(binary_data[start_check:end + 1] == 1):
-            bout_ends.append(end)
-
-    return np.array(bout_starts), np.array(bout_ends)
+    keep = (potential_ends - potential_starts + 1) >= min_frames
+    return potential_starts[keep], potential_ends[keep]
 
 def calculate_behavior_statistics(
-    behavior_matrix: np.ndarray,
-    n_bins: int,
-    bin_length_min: float,
+    behavior_vectors: list,
     sampling_rate: float,
     n_behaviors: int,
     min_frames: int,
 ):
     """
-    behavior_matrix: (n_frames, n_animals) int labels [0..n_behaviors-1]
-    Returns arrays shaped:
-      total_fraction: (n_animals, n_bins, n_behaviors)
-      n_bouts:       (n_animals, n_bins, n_behaviors)
-      bout_duration: (n_animals, n_bins, n_behaviors)
+    Behavior statistics over each animal's full recording (or window), as in the original MATLAB
+    (plain mean over the whole recording, no bins).
+
+    behavior_vectors: list of 1-D int label arrays [0..n_behaviors-1], one per animal, each at its
+      own length (no padding).
+    Returns arrays shaped (n_animals, n_behaviors):
+      fraction_time, n_bouts, mean_duration_s
+    and n_frames: (n_animals,) frames per animal.
     """
-    n_frames, n_animals = behavior_matrix.shape
-    if bin_length_min <= 0:
-        n_bins = 1
-        bin_length_frames = n_frames
-    else:
-        bin_length_frames = int(round(bin_length_min * 60 * sampling_rate))
-        bin_length_frames = max(1, bin_length_frames)
+    n_animals = len(behavior_vectors)
+    fraction_time = np.zeros((n_animals, n_behaviors), dtype=float)
+    n_bouts = np.zeros((n_animals, n_behaviors), dtype=float)
+    mean_duration_s = np.zeros((n_animals, n_behaviors), dtype=float)
+    n_frames = np.array([len(v) for v in behavior_vectors], dtype=int)
 
-    total_fraction = np.zeros((n_animals, n_bins, n_behaviors), dtype=float)
-    n_bouts = np.zeros((n_animals, n_bins, n_behaviors), dtype=float)
-    bout_duration = np.zeros((n_animals, n_bins, n_behaviors), dtype=float)
+    for k, vec in enumerate(behavior_vectors):
+        if len(vec) == 0:
+            fraction_time[k, :] = np.nan
+            n_bouts[k, :] = np.nan
+            mean_duration_s[k, :] = np.nan
+            continue
 
-    for k in range(n_animals):
         for b in range(n_behaviors):
-            binary_data = (behavior_matrix[:, k] == b).astype(int)
+            binary_data = (np.asarray(vec) == b).astype(int)
+            fraction_time[k, b] = np.mean(binary_data)
 
-            for n in range(n_bins):
-                if bin_length_min <= 0:
-                    binned = binary_data
-                else:
-                    start_idx = n * bin_length_frames
-                    end_idx = min((n + 1) * bin_length_frames, n_frames)
-                    binned = binary_data[start_idx:end_idx]
+            if np.sum(binary_data) > 0:
+                bout_starts, bout_ends = find_bouts(binary_data, min_frames)
 
-                if binned.size == 0:
-                    continue
-
-                if np.sum(binned) > 0:
-                    bout_starts, bout_ends = find_bouts(binned, min_frames)
+                if len(bout_starts) > 0 and len(bout_ends) > 0:
+                    bout_ends = bout_ends[bout_ends >= bout_starts[0]]
+                    if len(bout_ends) > 0:
+                        bout_starts = bout_starts[bout_starts <= bout_ends[-1]]
 
                     if len(bout_starts) > 0 and len(bout_ends) > 0:
-                        bout_ends = bout_ends[bout_ends >= bout_starts[0]]
-                        if len(bout_ends) > 0:
-                            bout_starts = bout_starts[bout_starts <= bout_ends[-1]]
+                        n_valid = min(len(bout_starts), len(bout_ends))
+                        durations = (bout_ends[:n_valid] - bout_starts[:n_valid] + 1) / sampling_rate
 
-                        if len(bout_starts) > 0 and len(bout_ends) > 0:
-                            n_valid = min(len(bout_starts), len(bout_ends))
-                            durations = (bout_ends[:n_valid] - bout_starts[:n_valid]) / sampling_rate
+                        n_bouts[k, b] = float(len(bout_starts))
+                        mean_duration_s[k, b] = float(np.mean(durations)) if len(durations) > 0 else 0.0
 
-                            total_fraction[k, n, b] = np.mean(binned)
-                            n_bouts[k, n, b] = float(len(bout_starts))
-                            bout_duration[k, n, b] = float(np.mean(durations)) if len(durations) > 0 else 0.0
-
-    return total_fraction, n_bouts, bout_duration
+    return fraction_time, n_bouts, mean_duration_s, n_frames
 
 
 
@@ -369,6 +350,7 @@ def calculate_state_statistics(
 
         for b in range(1, n_states + 1):
             binary_data = (data == b).astype(int)
+            total_fraction_state[k, b - 1] = float(np.mean(binary_data))
 
             if np.sum(binary_data) > 0:
                 bout_starts, bout_ends = find_bouts(binary_data, int(min_frames))
@@ -381,9 +363,8 @@ def calculate_state_statistics(
 
                     if len(bout_starts) > 0 and len(bout_ends) > 0:
                         n_valid = min(len(bout_starts), len(bout_ends))
-                        durations = (bout_ends[:n_valid] - bout_starts[:n_valid]) / float(fps)
+                        durations = (bout_ends[:n_valid] - bout_starts[:n_valid] + 1) / float(fps)
 
-                        total_fraction_state[k, b - 1] = float(np.mean(binary_data))
                         n_bouts_state[k, b - 1] = float(len(bout_starts))
                         bout_duration_state[k, b - 1] = float(np.mean(durations)) if len(durations) > 0 else 0.0
 
@@ -613,6 +594,8 @@ def load_lupe_data(base_dir: str, groups: list, conditions: list):
       group_labels: list[str]
       condition_labels: list[str]
       expected_length: int (max frames across animals)
+      behavior_vectors: list[np.ndarray], each animal's labels at its own length (no padding),
+        used for the per-animal behavior statistics (Sections 2/2b)
     """
     rows = []  # each entry: dict with file info + vector
     for group in groups:
@@ -657,8 +640,9 @@ def load_lupe_data(base_dir: str, groups: list, conditions: list):
     if expected_length <= 0:
         raise ValueError("Loaded files but frame counts are zero.")
 
-    # Pad/truncate all to expected_length
+    # Pad/truncate all to expected_length (used by the state model, Sections 4-9)
     behavior_data = []
+    behavior_vectors = []
     animal_names = []
     group_labels = []
     condition_labels = []
@@ -673,6 +657,7 @@ def load_lupe_data(base_dir: str, groups: list, conditions: list):
             vec_use = vec[:expected_length]
 
         behavior_data.append(vec_use)
+        behavior_vectors.append(vec)
         animal_names.append(r["animal"])
         group_labels.append(r["group"])
         condition_labels.append(r["condition"])
@@ -680,7 +665,7 @@ def load_lupe_data(base_dir: str, groups: list, conditions: list):
     behavior_matrix = np.column_stack(behavior_data)  # (expected_length, n_animals)
 
     print(f"[LUPE-AMPS] Loaded {behavior_matrix.shape[1]} animals, {behavior_matrix.shape[0]} frames each")
-    return behavior_matrix, animal_names, group_labels, condition_labels, expected_length
+    return behavior_matrix, animal_names, group_labels, condition_labels, expected_length, behavior_vectors
 
 
 # Main entrypoint called by Streamlit
@@ -698,7 +683,6 @@ def behavior_LUPE_AMPS(
     # defaults matching your notebook expectations
     sampling_rate: float = 60.0,
     target_fps: float = 20.0,
-    bin_length_min: float = 5.0,  # can set to 0 if you want no binning
     min_frames_true_positive: int = 6,
     make_timepoint_plots: bool = True,
     make_behavior_plots: bool = True,
@@ -884,7 +868,7 @@ def behavior_LUPE_AMPS(
         print(f"[LUPE-AMPS] Time windows: {time_ranges_min}")
 
     # Section 2: DATA LOADING AND BEHAVIOR STATISTICS
-    behavior_matrix, animal_names, group_labels, condition_labels, expected_length = load_lupe_data(
+    behavior_matrix, animal_names, group_labels, condition_labels, expected_length, behavior_vectors = load_lupe_data(
         base_data_dir, selected_groups, selected_conditions
     )
 
@@ -2071,32 +2055,15 @@ def behavior_LUPE_AMPS(
         print("=" * 60)
         raise
 
-    # Derive n_bins from expected_length so we don't hard-code recording_length
-    if bin_length_min <= 0:
-        n_bins = 1
-    else:
-        bin_length_frames = int(round(bin_length_min * 60.0 * sampling_rate))
-        bin_length_frames = max(1, bin_length_frames)
-        n_bins = int(np.ceil(expected_length / bin_length_frames))
-
+    # Over each animal's full recording at its own length (no bins, no padding)
     print("\n[LUPE-AMPS] Calculating behavior statistics...")
-    total_fraction, n_bouts, bout_duration = calculate_behavior_statistics(
-        behavior_matrix=behavior_matrix,
-        n_bins=n_bins,
-        bin_length_min=bin_length_min,
+    total_frac_time, total_num_bouts, total_mean_dur, animal_n_frames = calculate_behavior_statistics(
+        behavior_vectors,
         sampling_rate=sampling_rate,
         n_behaviors=n_behaviors,
         min_frames=min_frames_true_positive,
     )
-
-    # Aggregate across bins
-    total_frac_time = np.mean(total_fraction, axis=1)  # (n_animals, n_behaviors)
-    total_num_bouts = np.sum(n_bouts, axis=1)         # (n_animals, n_behaviors)
-
-    weighted_dur = bout_duration * n_bouts
-    total_mean_dur = np.sum(weighted_dur, axis=1) / (total_num_bouts + 1e-10)
-    total_mean_dur[np.isnan(total_mean_dur)] = 0.0
-    total_mean_dur[np.isinf(total_mean_dur)] = 0.0
+    animal_duration_min = animal_n_frames / sampling_rate / 60.0
 
     print(f"[LUPE-AMPS] Behavior statistics calculated for {total_frac_time.shape[0]} animals")
 
@@ -2110,6 +2077,9 @@ def behavior_LUPE_AMPS(
                 "FractionTime": total_frac_time[:, b],
                 "NumBouts": total_num_bouts[:, b],
                 "MeanDuration_s": total_mean_dur[:, b],
+                "n_frames": animal_n_frames,
+                "duration_min": animal_duration_min,
+                "bouts_per_min": total_num_bouts[:, b] / animal_duration_min,
             },
             index=animal_names,
         )
@@ -2306,27 +2276,20 @@ def behavior_LUPE_AMPS(
         behavior_timepoint_rows = []
 
         for label, (start_min, end_min) in zip(time_labels, time_ranges_min):
-            sl = _min_to_slice(start_min, end_min, sampling_rate, behavior_matrix.shape[0])
-            if sl.stop <= sl.start:
+            # Each animal's own frames in the window (no padding); a window past the end of a
+            # shorter recording covers only the frames that animal has
+            vecs_win = [v[_min_to_slice(start_min, end_min, sampling_rate, len(v))] for v in behavior_vectors]
+            if all(len(v) == 0 for v in vecs_win):
                 print(f"[LUPE-AMPS] Skipping empty window: {label}")
                 continue
 
-            bm_win = behavior_matrix[sl, :]
-
-            # One bin over the entire window
-            tf_win, nb_win, bd_win = calculate_behavior_statistics(
-                bm_win,
-                n_bins=1,
-                bin_length_min=0,  # one bin spanning window
+            tf_win, nb_win, bd_win, nf_win = calculate_behavior_statistics(
+                vecs_win,
                 sampling_rate=sampling_rate,
                 n_behaviors=n_behaviors,
                 min_frames=min_frames_true_positive,
             )
-
-            # (n_animals, 1, n_behaviors) -> squeeze bin dim
-            tf_win = tf_win[:, 0, :]
-            nb_win = nb_win[:, 0, :]
-            bd_win = bd_win[:, 0, :]
+            dur_win = nf_win / sampling_rate / 60.0
 
             for a_idx, animal in enumerate(animal_names):
                 for b_idx, beh_name in enumerate(behaviors):
@@ -2342,6 +2305,10 @@ def behavior_LUPE_AMPS(
                             "FractionTime": float(tf_win[a_idx, b_idx]),
                             "NumBouts": float(nb_win[a_idx, b_idx]),
                             "MeanDuration_s": float(bd_win[a_idx, b_idx]),
+                            "n_frames": int(nf_win[a_idx]),
+                            "duration_min": float(dur_win[a_idx]),
+                            "bouts_per_min": (float(nb_win[a_idx, b_idx] / dur_win[a_idx])
+                                              if nf_win[a_idx] > 0 else float("nan")),
                         }
                     )
 
