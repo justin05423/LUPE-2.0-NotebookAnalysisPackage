@@ -35,6 +35,7 @@ If you use LUPE in your research, please cite this work.
 
 - [System Requirements](#system-requirements)
 - [Installation Guide](#installation-guide)
+- [Running in Google Colab](#running-in-google-colab)
 - [Update Instructions](#update-instructions)
 - [Physical System Build](#physical-system-build)
 - [Contacting](#contacting)
@@ -68,7 +69,8 @@ Refer to the respective GitHub repositories for additional technical documentati
 ---
 
 # Installation Guide
-#### Download the LUPE 2.0 A-SOiD Model [HERE](https://upenn.box.com/s/9rfslrvcc7m6fji8bmgktnegghyu88b0) and move the contents of the folder into this 'Model' folder (If not already present in 'model' folder when repository is downloaded/cloned).
+#### LUPE 2.0 A-SOiD Model: downloads automatically
+The first time a notebook loads the classifier, it downloads `model/model_portable.npz` (57 MB) from the [LUPE-2.0-App v2.3.0 release](https://github.com/justin05423/LUPE-2.0-App/releases/tag/v2.3.0) and checks it against its sha256. If you already have `model/model.pkl` and scikit-learn 1.2.x, that is used instead. No internet on the analysis computer? Download `model_portable.npz` from that release page into the `model/` folder.
 > **Note**: Find the LUPE 2.0 DLC Model [HERE](https://upenn.box.com/s/av3i14c64rj6zls9lz6pda0it5b5q7f3) for analyzing pose estimation for LUPE video data.
 
 #### Access the analysis scripts: In a Virutal Environment IDE
@@ -80,6 +82,20 @@ pip install -r requirements.txt
 jupyter lab
 ```
 #### See [README-Analysis](https://github.com/justin05423/LUPE-2.0-AnalysisPackage/blob/main/manuscript_acc_2025/README-Analysis.md) for instructions to run and reproduce some of the analyses from the  [PRE-PRINT manuscript](https://github.com/justin05423/LUPE-2.0-AnalysisPackage/tree/main/manuscript_acc_2025)<sup>4</sup> data. 
+
+---
+
+# Running in Google Colab
+
+No installation needed: everything runs in your browser, and your projects and results are saved in your Google Drive.
+
+1. Open [LUPE_Colab_Setup.ipynb in Colab](https://colab.research.google.com/github/justin05423/LUPE-2.0-NotebookAnalysisPackage/blob/main/LUPE_Colab_Setup.ipynb) and run every cell (once). It puts the package in `MyDrive/LUPE-2.0-NotebookAnalysisPackage`, copies the notebooks into `notebooks/`, and checks the behavior model.
+2. Upload your DeepLabCut CSV folders to Google Drive, organized as `<project>/<group>/<condition>/*.csv`.
+3. In Google Drive, open any notebook in `LUPE-2.0-NotebookAnalysisPackage/notebooks/` with Google Colaboratory. Run the **Google Colab only** cell first, then continue as usual.
+
+> 💡 **Model:** `model/model.pkl` only loads in scikit-learn 1.2.x, which Colab does not provide. The notebooks use `model/model_portable.npz` instead, the same classifier stored as plain arrays (identical predictions; see `utils/model_compat.py`). It is downloaded into your Drive the first time, so later runs do not download it again.
+
+To get updates later, run `LUPE_Colab_Setup.ipynb` again.
 
 ---
 

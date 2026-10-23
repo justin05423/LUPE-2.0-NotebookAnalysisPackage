@@ -6288,3 +6288,8 @@ utils/meta.py
 processed_dataset/.DS_Store
 utils/meta.py
 /processed_dataset/project_LLE_rILNMORDREADD
+
+# Model files, downloaded from the LUPE-2.0-App GitHub release on first use (see utils/model_download.py)
+model/model.pkl
+model/model_portable.npz
+model/*.part
