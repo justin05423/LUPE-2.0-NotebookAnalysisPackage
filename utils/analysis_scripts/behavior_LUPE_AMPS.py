@@ -612,7 +612,7 @@ def downsample_behavior(behavior_matrix: np.ndarray, sampling_rate: float, targe
 
     return downsampled
 
-def load_lupe_data(base_dir: str, groups: list, conditions: list):
+def load_lupe_data(base_dir: str, groups: list, conditions: list, tolerance_frames: int = 0):
     """
     Load LUPE behavior CSVs organized as:
       base_dir/<group>/<condition>/*.csv
@@ -670,11 +670,12 @@ def load_lupe_data(base_dir: str, groups: list, conditions: list):
     if expected_length <= 0:
         raise ValueError("Loaded files but frame counts are zero.")
 
-    short_rows = [r for r in rows if r["n_frames"] < expected_length]
+    short_rows = [r for r in rows if r["n_frames"] < expected_length - tolerance_frames]
     if len(short_rows) > 0:
         print(
-            f"[LUPE-AMPS] Warning: {len(short_rows)} file(s) shorter than the longest ({expected_length} frames). "
-            "Their missing frames are padded for the state model and excluded from all state statistics:"
+            f"[LUPE-AMPS] Warning: {len(short_rows)} file(s) more than {tolerance_frames} frames shorter than the "
+            f"longest ({expected_length} frames). Their missing frames are padded for the state model and excluded "
+            "from all state statistics:"
         )
         for r in short_rows:
             print(
@@ -705,8 +706,11 @@ def load_lupe_data(base_dir: str, groups: list, conditions: list):
         condition_labels.append(r["condition"])
 
     behavior_matrix = np.column_stack(behavior_data)  # (expected_length, n_animals)
-    valid_frames = np.array([len(v) for v in behavior_vectors], dtype=int)
-
+    valid_frames = np.array(
+        [expected_length if expected_length - len(v) <= tolerance_frames else len(v) for v in behavior_vectors],
+        dtype=int,
+    )
+    
     print(f"[LUPE-AMPS] Loaded {behavior_matrix.shape[1]} animals, {behavior_matrix.shape[0]} frames each")
     return behavior_matrix, animal_names, group_labels, condition_labels, expected_length, behavior_vectors, valid_frames
 
@@ -732,6 +736,7 @@ def behavior_LUPE_AMPS(
     window_length_sec: int = 30,
     window_slide_sec: int = 10,
     model_fit_shuffles: int = 100,
+    short_file_tolerance_sec: float = 1.0,
 ):
     """
     Backend LUPE-AMPS runner.
@@ -911,8 +916,9 @@ def behavior_LUPE_AMPS(
         print(f"[LUPE-AMPS] Time windows: {time_ranges_min}")
 
     # Section 2: DATA LOADING AND BEHAVIOR STATISTICS
+    tolerance_frames = int(round(float(short_file_tolerance_sec) * float(sampling_rate)))
     behavior_matrix, animal_names, group_labels, condition_labels, expected_length, behavior_vectors, valid_frames = load_lupe_data(
-        base_data_dir, selected_groups, selected_conditions
+        base_data_dir, selected_groups, selected_conditions, tolerance_frames=tolerance_frames
     )
 
     # Section 4: PREPROCESSING - DOWNSAMPLING
