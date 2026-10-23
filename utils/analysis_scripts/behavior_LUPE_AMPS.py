@@ -57,6 +57,7 @@ def calculate_behavior_statistics(
 
         for b in range(n_behaviors):
             binary_data = (np.asarray(vec) == b).astype(int)
+            fraction_time[k, b] = np.mean(binary_data)
 
             if np.sum(binary_data) > 0:
                 bout_starts, bout_ends = find_bouts(binary_data, min_frames)
@@ -68,9 +69,8 @@ def calculate_behavior_statistics(
 
                     if len(bout_starts) > 0 and len(bout_ends) > 0:
                         n_valid = min(len(bout_starts), len(bout_ends))
-                        durations = (bout_ends[:n_valid] - bout_starts[:n_valid]) / sampling_rate
+                        durations = (bout_ends[:n_valid] - bout_starts[:n_valid] + 1) / sampling_rate
 
-                        fraction_time[k, b] = np.mean(binary_data)
                         n_bouts[k, b] = float(len(bout_starts))
                         mean_duration_s[k, b] = float(np.mean(durations)) if len(durations) > 0 else 0.0
 
@@ -379,6 +379,7 @@ def calculate_state_statistics(
 
         for b in range(1, n_states + 1):
             binary_data = (data == b).astype(int)
+            total_fraction_state[k, b - 1] = float(np.mean(binary_data))
 
             if np.sum(binary_data) > 0:
                 bout_starts, bout_ends = find_bouts(binary_data, int(min_frames))
@@ -391,9 +392,8 @@ def calculate_state_statistics(
 
                     if len(bout_starts) > 0 and len(bout_ends) > 0:
                         n_valid = min(len(bout_starts), len(bout_ends))
-                        durations = (bout_ends[:n_valid] - bout_starts[:n_valid]) / float(fps)
+                        durations = (bout_ends[:n_valid] - bout_starts[:n_valid] + 1) / float(fps)
 
-                        total_fraction_state[k, b - 1] = float(np.mean(binary_data))
                         n_bouts_state[k, b - 1] = float(len(bout_starts))
                         bout_duration_state[k, b - 1] = float(np.mean(durations)) if len(durations) > 0 else 0.0
 
