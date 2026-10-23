@@ -7,19 +7,26 @@ import os
 
 
 def load_model(path):
-    # model.pkl only unpickles in scikit-learn 1.2.x. Newer versions (e.g. Google Colab) fall back to
-    # model_portable.npz in the same folder, the same forest stored as plain arrays (see utils/model_compat.py)
-    portable_path = os.path.join(os.path.dirname(path), 'model_portable.npz')
-    try:
-        with open(path, 'rb') as fr:
-            model = pickle.load(fr)
-    except Exception as e:
-        if not os.path.exists(portable_path):
-            raise
-        print(f"Could not load {path} ({type(e).__name__}); loading {portable_path} instead.")
-        from utils.model_compat import load_portable_model
-        model = load_portable_model(portable_path)
-    return model
+    # model.pkl only unpickles in scikit-learn 1.2.x. If it is missing, or the installed scikit-learn is newer
+    # (e.g. Google Colab), use model_portable.npz in the same folder instead: the same forest stored as plain
+    # arrays (see utils/model_compat.py), downloaded from the LUPE-2.0-App GitHub release on first use.
+    from utils.model_download import ensure_model_file, is_lfs_pointer, model_url, print_progress
+    model_dir = os.path.dirname(path)
+    if os.path.exists(path) and not is_lfs_pointer(path):
+        try:
+            with open(path, 'rb') as fr:
+                return pickle.load(fr)
+        except Exception as e:
+            print(f"Could not load {path} ({type(e).__name__}); using model_portable.npz instead.")
+
+    portable_name = 'model_portable.npz'
+    if not os.path.exists(os.path.join(model_dir, portable_name)):
+        print(f"Downloading {portable_name} from {model_url(portable_name)} (first use only)...")
+    portable_path, status = ensure_model_file(portable_name, model_dir, progress=print_progress)
+    if status == 'mismatch':
+        print(f"Warning: {portable_path} does not match the released model (sha256 differs); using it as is.")
+    from utils.model_compat import load_portable_model
+    return load_portable_model(portable_path)
 
 
 def load_data(path):
