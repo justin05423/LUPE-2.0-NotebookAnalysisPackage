@@ -3,6 +3,7 @@
 **/.DS_Store/
 .gitattributes
 .venv/
+myenv/
 
 # Default ignored files
 /shelf/
